@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33815.320
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Trk2Rt", "Trk2Rt\Trk2Rt.vcxproj", "{0B3CD802-1898-44DC-A1A6-69946809D294}"
+EndProject
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "Trk2Rt64", "Trk2Rt64\Trk2Rt64.vdproj", "{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0B3CD802-1898-44DC-A1A6-69946809D294}.Debug|x64.ActiveCfg = Debug|x64
+		{0B3CD802-1898-44DC-A1A6-69946809D294}.Debug|x64.Build.0 = Debug|x64
+		{0B3CD802-1898-44DC-A1A6-69946809D294}.Debug|x86.ActiveCfg = Debug|Win32
+		{0B3CD802-1898-44DC-A1A6-69946809D294}.Debug|x86.Build.0 = Debug|Win32
+		{0B3CD802-1898-44DC-A1A6-69946809D294}.Release|x64.ActiveCfg = Release|x64
+		{0B3CD802-1898-44DC-A1A6-69946809D294}.Release|x64.Build.0 = Release|x64
+		{0B3CD802-1898-44DC-A1A6-69946809D294}.Release|x86.ActiveCfg = Release|Win32
+		{0B3CD802-1898-44DC-A1A6-69946809D294}.Release|x86.Build.0 = Release|Win32
+		{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}.Debug|x64.ActiveCfg = Debug
+		{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}.Debug|x86.ActiveCfg = Debug
+		{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}.Release|x64.ActiveCfg = Release
+		{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}.Release|x86.ActiveCfg = Release
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {5F28C65D-251A-4249-B667-F1E117B0E818}
+	EndGlobalSection
+EndGlobal
