@@ -13,13 +13,6 @@ A prebuilt 64 bit Windows version, with installer and documentation, is availabl
 Prebuilt 32 bit and 64 bit executables are available in the Executables folder.
 
 Building Trk2Rt requires RapidXML which is available from https://rapidxml.sourceforge.net/
-- convert tracks and waypoints to routes,
-- convert routes to tracks and waypoints,
-- enhance routes with additional shaping points.
-
-Both GPX and KML files are supported.
-
-The User's Guide details these, and additonal capabilities.
 
 A prebuilt 64 bit Windows version, with installer and User's Guide, is available in the Download folder.
 
