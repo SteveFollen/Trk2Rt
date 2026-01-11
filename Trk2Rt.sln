@@ -26,6 +26,7 @@ Global
 		{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}.Debug|x64.ActiveCfg = Debug
 		{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}.Debug|x86.ActiveCfg = Debug
 		{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}.Release|x64.ActiveCfg = Release
+		{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}.Release|x64.Build.0 = Release
 		{F9C82BD8-AF91-E3AC-C8EC-55E80060C784}.Release|x86.ActiveCfg = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution

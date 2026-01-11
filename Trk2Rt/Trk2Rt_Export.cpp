@@ -7,6 +7,91 @@
 constexpr int MAX_NAME_END_LEN = 13;
 constexpr int MAX_RTPN_LEN = 17;
 
+
+// Get the export file pathname (path and filename).
+// Start with the default and open the standard Windows file save dialog if requested.
+LRESULT t2rGetExportFileName(bool dialog)
+{
+    int retVal = -1; // failure
+
+    wchar_t exportPath[MAX_PATH]; // export path, without file name
+    wchar_t exportFileStem[MAX_PATH];  // export file name without extension
+    fs::path fsExportPathname = importPathname; // complete path and file name
+
+    wcscpy_s(exportFileStem, MAX_PATH, fsExportPathname.stem().c_str());
+
+    fsExportPathname.remove_filename();
+    wcscpy_s(exportPath, MAX_PATH, fsExportPathname.c_str());
+
+    if (!dialog) {
+        wcscpy_s(exportPathname, MAX_PATH, exportPath);
+        wcscat_s(exportPathname, MAX_PATH, L"T2R\\");
+        wcscat_s(exportPathname, MAX_PATH, exportFileStem);
+        wcscat_s(exportPathname, MAX_PATH, L"_T2R.gpx");
+        retVal = 0;
+    }
+    else {
+        IFileSaveDialog* fileSaveDlg = NULL;
+        IShellItem* shellItem = NULL;
+        IShellItem* outShellItem = NULL;
+        PWSTR filePath = NULL;
+        COMDLG_FILTERSPEC outFltrSpec[] =
+        {
+            { L"", L"*.gpx"},
+        };
+
+        wcscat_s(exportFileStem, MAX_PATH, L"_T2R");
+        wcscat_s(exportPath, MAX_PATH, L"T2R\\"); // add the default export directory name
+
+        do {
+            if (!SUCCEEDED(CoCreateInstance(CLSID_FileSaveDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&fileSaveDlg))))
+                break;
+            CreateDirectoryW(exportPath, NULL); // create the export directory; ERROR_ALREADY_EXISTS is harmless
+            if (!SUCCEEDED(SHCreateItemFromParsingName(exportPath, NULL, IID_PPV_ARGS(&outShellItem))))
+                break;
+            if (!SUCCEEDED(fileSaveDlg->SetFolder(outShellItem)))
+                break;
+            if (!SUCCEEDED(fileSaveDlg->SetFileName(exportFileStem)))
+                break;
+            if (!SUCCEEDED(fileSaveDlg->SetFileTypes(1, outFltrSpec)))
+                break;
+            if (!SUCCEEDED(fileSaveDlg->SetFileTypeIndex(1)))
+                break;
+            if (!SUCCEEDED(fileSaveDlg->SetDefaultExtension(L"gpx")))
+                break;
+            if (!SUCCEEDED(fileSaveDlg->Show(NULL)))
+                break;
+            if (!SUCCEEDED(fileSaveDlg->GetResult(&shellItem)))
+                break;
+            if (!SUCCEEDED(shellItem->GetDisplayName(SIGDN_FILESYSPATH, &filePath)))
+                break;
+            retVal = 0; //success
+        } while (0);
+
+        if (filePath != NULL) {
+            if (lstrlenW(filePath) < MAX_IN_FILE_NAME_LEN) {
+                wcscpy_s(exportPathname, MAX_PATH, filePath);
+            }
+            else {
+                wstring t2rMsg = L"Export pathname is too long.";
+                MessageBoxW(NULL, t2rMsg.c_str(), L"Error While Exporting", MB_OK | MB_ICONERROR);
+                retVal = -1;
+            }
+            CoTaskMemFree(filePath);
+        }
+        if (shellItem != NULL) {
+            shellItem->Release();
+        }
+        if (outShellItem != NULL) {
+            outShellItem->Release();
+        }
+        if (fileSaveDlg != NULL) {
+            fileSaveDlg->Release();
+        }
+    }
+    return retVal;
+}
+
 // Write the route beginning at pt to the export file gpxFileOut.
 // pt must be valid.
 // Return pointer to the start of the next route in prmRtPtList, if any, otherwise NULL
@@ -48,6 +133,9 @@ static RoutePoint* t2rexportRoute(wofstream& gpxFileOut, int rtPartNum, RoutePoi
     int ptSpacingCount;   // point count for additional shaping point spacing
     int expShPtCount;     // count of exported additional shaping points following pt
     TrackPoint* trkPt;    // track point
+    TrackPoint* nextTrkPt; // next track point
+    double lat; // latitude
+    double lon; // longitude
 
     if (rtPartNum < 2) {
         // this is the first or only route
@@ -134,6 +222,7 @@ static RoutePoint* t2rexportRoute(wofstream& gpxFileOut, int rtPartNum, RoutePoi
             ptSpacingCount = 0;
             expShPtCount = 0;
             while (trkPt && (expShPtCount < pt->nShpPts) && (trkPt != nextPt->trkSeg)) {
+                nextTrkPt = theTrack.getNext(trkPt);
                 if (pt->nRdIdChg) {
                     if (trkPt->isRdIdChg()) {
                         ptSpacingCount++; // count only the road change points
@@ -143,10 +232,23 @@ static RoutePoint* t2rexportRoute(wofstream& gpxFileOut, int rtPartNum, RoutePoi
                     ptSpacingCount++; // count every track point
                 }
                 if (ptSpacingCount == shpPtSpacing) {
+                    if (nextTrkPt) {
+                        // Digital maps generally have points at almost every intersection,
+                        // so track points are often at intersections.
+                        // Placing additional shaping points between track points
+                        // keeps most of those points out of intersections.
+                        // (It is always a straight line between adjacent track points.)
+                        lat = (trkPt->lat + nextTrkPt->lat) / 2;
+                        lon = (trkPt->lon + nextTrkPt->lon) / 2;;
+                    }
+                    else {
+                        lat = trkPt->lat;
+                        lon = trkPt->lon;
+                    }
                     gpxFileOut << rteptStart;
-                    gpxFileOut << trkPt->lat;
+                    gpxFileOut << lat;
                     gpxFileOut << rtept2;
-                    gpxFileOut << trkPt->lon;
+                    gpxFileOut << lon;
                     gpxFileOut << rtept3;
                     gpxFileOut << ptPrefix;
                     if (numStyIdx == NS_ALL) { // continuous numbering of all points
@@ -169,7 +271,7 @@ static RoutePoint* t2rexportRoute(wofstream& gpxFileOut, int rtPartNum, RoutePoi
                     ptSpacingCount = 0;
                     expShPtCount++;
                 }
-                trkPt = theTrack.getNext(trkPt);
+                trkPt = nextTrkPt;
             }
         }
         if (!nextPt || (pt->posInRt == RTPOS_LAST)) {
@@ -267,9 +369,9 @@ LRESULT t2rExport()
 
 
     int retVal = 0; // Return value
-    wchar_t expFileNameBase[MAX_PATH];        // export file name base
+    wchar_t exportPath[MAX_PATH]; // export path, without file name
     wchar_t expFileNameEnd[MAX_NAME_END_LEN]; // export file name end
-    wchar_t exportFileName[MAX_PATH] = L"";   // complete export file name
+    wchar_t* endPos; // end position
     wstring  exportFilesString = L""; // string of all complete export file pathnames, for display
     wofstream gpxFileOut; // The export file
     wstring t2rMsg; // error or warning message test
@@ -304,24 +406,9 @@ LRESULT t2rExport()
             GetWindowTextW(hwndRouteName, prmRtPtList.routeName, MAX_NAME_LEN);
         }
 
-        wchar_t* pFileName = wcsrchr(importFileName, L'\\') + 1;
-
-        if (wcslen(expPath) > 0) {
-            wcscpy_s(expFileNameBase, MAX_PATH, expPath); // copy the command line provided export path, if any
-            wcscat_s(expFileNameBase, MAX_PATH, L"\\");   // add the trailing slash
-        }
-        else {
-            wcsncpy_s(expFileNameBase, MAX_PATH, importFileName, lstrlenW(importFileName) - lstrlenW(pFileName)); // get the import file path including final backslash
-            if (wcslen(expSubdir) > 0) {
-                wcscat_s(expFileNameBase, MAX_PATH, expSubdir); // add the command line provided export directory name, if any
-                wcscat_s(expFileNameBase, MAX_PATH, L"\\");     // add the trailing slash
-            }
-            else {
-                wcscat_s(expFileNameBase, MAX_PATH, L"T2R\\"); // add the default export directory name
-            }
-        }
-        CreateDirectoryW(expFileNameBase, NULL); // create the export directory; ERROR_ALREADY_EXISTS is harmless
-        wcsncat_s(expFileNameBase, MAX_PATH, pFileName, lstrlenW(pFileName) - lstrlenW(wcsrchr(importFileName, L'.') + 1) - 1); // add original import file name without .extension
+        endPos = wcsrchr(exportPathname, L'\\');
+        wcsncpy_s(exportPath, MAX_PATH, exportPathname, endPos - exportPathname);
+        CreateDirectoryW(exportPath, NULL); // create the export directory; ERROR_ALREADY_EXISTS is harmless
 
         if (expWpt) {
             wayPt = prmRtPtList.getFirst();
@@ -335,26 +422,25 @@ LRESULT t2rExport()
 
         if (prmRtPtList.getNumRoutes() > 1) {
             rtPartNum = 1;
+            endPos = wcsrchr(exportPathname, L'.');
+            *endPos = L'\0';
         } // else rtPartNum reamins 0; there is only a single file to export; no route part numbers needed
 
         do {
-            wcscpy_s(exportFileName, MAX_PATH, expFileNameBase);
             if (rtPartNum) {
                 if (rtPartNum > 1) {
                     exportFilesString += L"\n";
                 }
-                _snwprintf_s(expFileNameEnd, MAX_NAME_END_LEN, _TRUNCATE, L"_T2R_P%02d.gpx", rtPartNum);
-                wcsncat_s(exportFileName, MAX_PATH, expFileNameEnd, 12); // append export name and extension
+                _snwprintf_s(expFileNameEnd, MAX_NAME_END_LEN, _TRUNCATE, L"_P%02d.gpx", rtPartNum);
+                *endPos = L'\0';
+                wcscat_s(exportPathname, MAX_PATH, expFileNameEnd);
             }
-            else {
-                wcsncat_s(exportFileName, MAX_PATH, L"_T2R.gpx", 8); // append export name and extension
-            }
-            exportFilesString += exportFileName;
+            exportFilesString += exportPathname;
 
-            gpxFileOut.open(exportFileName);
+            gpxFileOut.open(exportPathname);
             if (!(gpxFileOut.is_open())) {
-                wstring tmpStr(exportFileName);
-                t2rMsg = L"Failed to Open export file/n" + tmpStr;
+                wstring tmpStr(exportPathname);
+                t2rMsg = L"Failed to Open export file " + tmpStr;
                 MessageBoxW(NULL, t2rMsg.c_str(), L"Error While Exporting", MB_OK | MB_ICONERROR);
                 retVal = -1;
                 break;
@@ -395,6 +481,7 @@ LRESULT t2rExport()
             
             rtPartNum++;
             if (rtPartNum > 99) { // sanity check
+                MessageBoxW(NULL, L"Max 99 export routes", L"Error While Exporting", MB_OK | MB_ICONERROR);
                 retVal = -1;
                 break;
             }
@@ -408,7 +495,7 @@ LRESULT t2rExport()
         ShowWindow(hwndExpFile, SW_NORMAL);
 
         // If the export file name is too long for the current horizontal scroll range, then expand it.
-        int expLen = (int)(lstrlenW(exportFileName) * cxChar * 1.1);
+        int expLen = (int)(lstrlenW(exportPathname) * cxChar * 1.1);
         SCROLLINFO si;
         si.cbSize = sizeof(si);
         si.fMask = SIF_RANGE;

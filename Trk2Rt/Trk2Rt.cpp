@@ -28,7 +28,8 @@ WCHAR szTitle[MAX_LOADSTRING];       // title bar text
 WCHAR szWindowClass[MAX_LOADSTRING]; // main window class name
 
 WCHAR ptNameBase[MAX_BASE_NAME_LEN]; // Base for shaping point naming; track point number will be appended to this base
-WCHAR importFileName[MAX_PATH];
+WCHAR importPathname[MAX_PATH]; // Complete path and file name of the import file
+WCHAR exportPathname[MAX_PATH]; // Complete path and file name of the export file
 int nShPtIdx;   // Index for global % of intermediate track points to export as additional shaping points between each primary route point pair (nShPtVal / hwndNumShPt).
                 // Note that this initially seeds and, on change, overwrites the route point specific nShPtIdx / hwndRtPtNSP.
 Track theTrack; // The imported track, if any. Only one track per import is supported.
@@ -42,8 +43,6 @@ bool parseImFl; // true if there is an import file from the command line to be p
 bool reLocPrmRtPt;           // relocate each primary route point to its closest track point
 bool stripPrev;              // strip previous prefix and numbering, if any, from imported route points
 ptNumStyle_t numStyIdx;      // point numbering style on export
-wchar_t expSubdir[MAX_PATH]; // export file sub-directory name
-wchar_t expPath[MAX_PATH];   // export file complete path
 
 bool expWpt; // export waypoints
 bool expTrk; // export track
@@ -204,11 +203,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     reLocPrmRtPt = true;
     stripPrev = false;
     numStyIdx = NS_ALL;
-    importFileName[0] = L'\0';
+    importPathname[0] = L'\0';
+    exportPathname[0] = L'\0';
     parseImFl = false;
     runBkGrnd = false;
-    expSubdir[0] = L'\0';
-    expPath[0] = L'\0';
 
     int retVal = 0;
     wchar_t* pos;
@@ -216,15 +214,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     int argc;
     LPWSTR cmdLn = GetCommandLineW();
     LPWSTR* argv = CommandLineToArgvW(cmdLn, &argc);
-    WCHAR argFileName[MAX_PATH];
 
     do {
         if (argc > 1) {
             // import file name is the last thing on the command line
             if (lstrlenW(argv[argc - 1]) < MAX_IN_FILE_NAME_LEN) {
+                WCHAR argFileName[MAX_PATH];
                 wcscpy_s(argFileName, MAX_PATH, argv[argc - 1]);
                 parseImFl = true;
-                GetFullPathNameW(argFileName, MAX_PATH, importFileName, NULL);
+                GetFullPathNameW(argFileName, MAX_PATH, importPathname, NULL);
             }
             else {
                 MessageBoxW(NULL, L"Import path file is too long.", L"Trk2Rt Error While Importing", MB_OK | MB_ICONERROR);
@@ -256,16 +254,48 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 if (pos = wcsstr(cmdLn, L"NS_ALL")) {
                     numStyIdx = NS_ALL;
                 }
-
-                if (pos = wcsstr(cmdLn, L"NS_VIA")) {
+                else if (pos = wcsstr(cmdLn, L"NS_VIA")) {
                     numStyIdx = NS_VIA;
                 }
-
-                if (pos = wcsstr(cmdLn, L"NS_NONE")) {
+                else if (pos = wcsstr(cmdLn, L"NS_NONE")) {
                     numStyIdx = NS_NONE;
                 }
 
-                if (pos = wcsstr(cmdLn, L"exportSubdir=")) {
+                if (pos = wcsstr(cmdLn, L"exportPathname=")) {
+                    if (*pos == L'\"') {
+                        pos += 1;
+                        endPos = wcschr(pos, L'\"');
+                    }
+                    else {
+                        endPos = wcschr(pos, L' ');
+                    }
+                    if (endPos) {
+                        wcsncpy_s(exportPathname, MAX_PATH, pos, endPos - pos);
+                    }
+                }
+                else if (pos = wcsstr(cmdLn, L"exportPath=")) {
+                    pos += wcslen(L"exportPath=");
+                    if (*pos == L'\"') {
+                        endPos = wcschr(pos + 1, L'\"');
+                    }
+                    else {
+                        endPos = wcschr(pos + 1, L' ');
+                    }
+                    if (endPos) {
+                        wchar_t expPath[MAX_PATH] = L"";   // export file complete path
+                        wcsncpy_s(expPath, MAX_PATH, pos, endPos - pos);
+                        fs::path path = expPath;
+                        fs::path fsImportPathname = importPathname; // complete path and file name
+                        path.replace_extension(); // strip extension if there is one
+                        wcscpy_s(exportPathname, MAX_PATH, path.c_str());
+                        if (exportPathname[lstrlenW(exportPathname) - 1] != L'\\') {
+                            wcscat_s(exportPathname, MAX_PATH, L"\\");
+                        }
+                        wcscat_s(exportPathname, MAX_PATH, fsImportPathname.stem().c_str());
+                        wcscat_s(exportPathname, MAX_PATH, L"_T2R.gpx");
+                    }
+                }
+                else if (pos = wcsstr(cmdLn, L"exportSubdir=")) {
                     pos += wcslen(L"exportSubdir=");
                     if (*pos == L'\"') {
                         pos += 1;
@@ -275,21 +305,34 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                         endPos = wcschr(pos, L' ');
                     }
                     if (endPos) {
+                        wchar_t exportFileStem[MAX_PATH];  // export file name without extension
+                        wchar_t expSubdir[MAX_PATH]; // export file sub-directory name
                         wcsncpy_s(expSubdir, MAX_PATH, pos, endPos - pos);
+                        fs::path subPath = expSubdir;
+                        fs::path fsImportPathname = importPathname; // complete path and file name
+                        wcscpy_s(exportFileStem, MAX_PATH, fsImportPathname.stem().c_str());
+                        subPath.replace_extension();// strip extension if there is one
+                        fsImportPathname.remove_filename();
+
+                        wcscpy_s(exportPathname, MAX_PATH, fsImportPathname.c_str());
+                        wcscat_s(exportPathname, MAX_PATH, subPath.c_str());
+                        if (exportPathname[lstrlenW(exportPathname) - 1] != L'\\') {
+                            wcscat_s(exportPathname, MAX_PATH, L"\\");
+                        }
+                        wcscat_s(exportPathname, MAX_PATH, exportFileStem);
+                        wcscat_s(exportPathname, MAX_PATH, L"_T2R.gpx");
                     }
                 }
-
-                if (pos = wcsstr(cmdLn, L"exportPath=")) {
-                    pos += wcslen(L"exportPath=");
-                    if (*pos == L'\"') {
-                        endPos = wcschr(pos + 1, L'\"');
-                    }
-                    else {
-                        endPos = wcschr(pos + 1, L' ');
-                    }
-                    if (endPos) {
-                        wcsncpy_s(expPath, MAX_PATH, pos, endPos - pos);
-                    }
+                else {
+                    // default export file
+                    wchar_t exportFileStem[MAX_PATH];  // export file name without extension
+                    fs::path fsImportPathname = importPathname; // complete path and file name
+                    wcscpy_s(exportFileStem, MAX_PATH, fsImportPathname.stem().c_str());
+                    fsImportPathname.remove_filename();
+                    wcscpy_s(exportPathname, MAX_PATH, fsImportPathname.c_str());
+                    wcscat_s(exportPathname, MAX_PATH, L"T2R\\");
+                    wcscat_s(exportPathname, MAX_PATH, exportFileStem);
+                    wcscat_s(exportPathname, MAX_PATH, L"_T2R.gpx");
                 }
 
                 if ((retVal = t2rParseImportFile()) == 0) {
@@ -442,7 +485,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case IDC_EXPORT_RT_CHK:
             expRt = (SendMessage(hwndExpRtCheck, BM_GETCHECK, (WPARAM)0, (LPARAM)0) == BST_CHECKED);
             t2rUpdateDspOnRtExportSelect();
-            // fall thru
+            [[fallthrough]];
         case IDC_EXPORT_CHK:
             expWpt = (SendMessage(hwndExpWpCheck, BM_GETCHECK, (WPARAM)0, (LPARAM)0) == BST_CHECKED);
             expTrk = (SendMessage(hwndExpTrkCheck, BM_GETCHECK, (WPARAM)0, (LPARAM)0) == BST_CHECKED);
@@ -539,7 +582,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (HIWORD(wParam) == BN_CLICKED) {
                 // route point detail route split selection checkbox
                 t2rUpdateRtPtShapeOptions();
-                t2rUpdateExportInfoDisplay();
                 t2rClearExportedFileDisplay();
             }
             break;
@@ -622,6 +664,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case IDC_EXPORT_BUTTON:
             // export button
             if (HIWORD(wParam) == BN_CLICKED) {
+                t2rGetExportFileName(false); // default export file pathname
                 t2rExport();
             }
             break;
@@ -641,6 +684,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             break;
         case ID_FILE_EXPORT:
             // export menu item
+            t2rGetExportFileName(true); // get export file pathname using standard windows file save dialog
             t2rExport();
             break;
         case IDM_EXIT:
@@ -2245,7 +2289,7 @@ void t2rSplitRoute() {
 
     // The vertical heights of the export info and export file windows need to be expanded to accomodate the new route(s).
     // For a single route, export info also has 2 lines for waypoints and track.
-    SetWindowPos(hwndExportInfo, NULL, 0, 0, (int)(MAX_EXP_INFO_LEN * cxChar * 1.1), cyChar * min(3, prmRtPtList.getNumRoutes()),
+    SetWindowPos(hwndExportInfo, NULL, 0, 0, (int)(MAX_EXP_INFO_LEN * cxChar * 1.1), cyChar * max(3, prmRtPtList.getNumRoutes()),
         SWP_NOOWNERZORDER | SWP_NOREDRAW | SWP_NOMOVE | SWP_NOZORDER);
 
     SetWindowPos(hwndExpFile, NULL, 0, 0, (int)(MAX_PATH * cxChar * 1.1), cyChar * prmRtPtList.getNumRoutes(),

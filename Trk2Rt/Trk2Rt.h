@@ -15,6 +15,10 @@
 #include <fileapi.h> // for CreateDirectoryW()
 #include <windef.h>  // for SIZE
 #include "rapidxml_utils.hpp" // the rapid xml parsing [header only] library
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
 
 // Maximum lengths, including the null terminator (number of wide charaters, not bytes)
 constexpr int MAX_IN_FILE_NAME_LEN = MAX_PATH - 13; // leave space to append "T2R\"_T2R_P01/n" onto the import file name for export file name(s)
@@ -578,7 +582,8 @@ public:
 
 // Global Variables:
 extern WCHAR ptNameBase[MAX_BASE_NAME_LEN]; // Base for shaping point naming; track point number will be appended to this base
-extern WCHAR importFileName[MAX_PATH];
+extern WCHAR importPathname[MAX_PATH]; // Complete path and file name of the import file
+extern WCHAR exportPathname[MAX_PATH]; // Complete path and file name of the export file
 extern int nShPtIdx; // Index for global % of intermediate track points to export as additional shaping points between each primary route point pair (nShPtVal / hwndNumShPt).
                      // Note that this initially seeds and, on change, overwrites the route point specific nShPtIdx / hwndRtPtNSP.
 extern Track theTrack; // the track. Only one track per import is supported.
@@ -594,8 +599,6 @@ extern bool expRt;   // export route
 extern bool reLocPrmRtPt; // relocate each primary route point to its closest track point
 extern bool stripPrev; // strip previous prefix and numbering, if any, from imported route points
 extern ptNumStyle_t numStyIdx; // point numbering style on export
-extern wchar_t expSubdir[MAX_PATH]; // export file sub-directory name
-extern wchar_t expPath[MAX_PATH];   // export file complete path
 
 extern int cxChar; // average character width (pixels)
 
@@ -644,6 +647,7 @@ extern HWND hwnd2ndExcLbl;    // Second exclude label; this one is for the exclu
 LRESULT t2rGetImportFileName();
 int t2rParseImportFile();
 // Export file related
+LRESULT t2rGetExportFileName(bool dialog);
 LRESULT t2rExport();
 void t2rClearExportedFileDisplay();
 // child window positioning and main (parent) window sizing

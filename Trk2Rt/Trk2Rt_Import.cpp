@@ -129,9 +129,34 @@ LRESULT t2rGetImportFileName()
     PWSTR filePath = NULL;
     int retVal = -1; // failure
 
+    COMDLG_FILTERSPEC inFltrSpec[] =
+    {
+        { L"", L"*.gpx;*.kml"},
+        { L"", L"*.gpx"},
+        { L"", L"*.kml"},
+    };
+
     do {
         hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL,
             IID_IFileOpenDialog, reinterpret_cast<void**>(&fileOpenDlg));
+        if (!SUCCEEDED(hr))
+        {
+            break;
+        }
+
+        hr = fileOpenDlg->SetFileTypes(3, inFltrSpec);
+        if (!SUCCEEDED(hr))
+        {
+            break;
+        }
+
+        hr = fileOpenDlg->SetFileTypeIndex(1);
+        if (!SUCCEEDED(hr))
+        {
+            break;
+        }
+
+        hr = fileOpenDlg->SetDefaultExtension(L"gpx;kml");
         if (!SUCCEEDED(hr))
         {
             break;
@@ -159,7 +184,7 @@ LRESULT t2rGetImportFileName()
 
     if (filePath != NULL) {
         if (lstrlenW(filePath) < MAX_IN_FILE_NAME_LEN) {
-            wcscpy_s(importFileName, MAX_PATH, filePath);
+            wcscpy_s(importPathname, MAX_PATH, filePath);
         }
         else {
             wstring t2rMsg = L"Import path file is too long.";
@@ -733,16 +758,18 @@ int t2rParseImportFile()
         xml_node<>* gpxNode = NULL; // gpx node at top of doc, if import file is gpx
         xml_node<>* kmlNode = NULL; // kml node at top of doc, if import file is kml
         xml_node<>* docNode = NULL; // Document node inside kml node
+        xml_node<>* fldNode = NULL; // possible Folder node(s) inside kml Document node
+        xml_node<>* topNode = NULL; // Document or Folder node to start parsing placemark point and linestring corrdinates from
 
         if (!doc) {
             retVal = -1;
             break;
         }
-        wcstombs_s(&numChar, impFl, MAX_PATH, importFileName, _TRUNCATE);
+        wcstombs_s(&numChar, impFl, MAX_PATH, importPathname, _TRUNCATE);
 
         // check file open so error can be handled if needed - avoid rapidxml throwing exception
         ifstream importFile;
-        importFile.open(importFileName);
+        importFile.open(importPathname);
         if (!importFile.is_open()) {
             MessageBoxW(NULL, L"Could not open import file", L"Trk2Rt Import Aborted.", MB_OK | MB_ICONERROR);
             retVal = -1;
@@ -773,8 +800,15 @@ int t2rParseImportFile()
         else if (kmlNode) {
             docNode = kmlNode->first_node("Document");
             if (docNode) {
-                t2rGetPlacemarkPts_KML(docNode);
-                t2rGetLinestring_KML(docNode);
+                topNode = docNode;
+                // points and linestring may be inside one or more nested Folder nodes.
+                fldNode = docNode->first_node("Folder");
+                while (fldNode) {
+                    topNode = fldNode;
+                    fldNode = fldNode->first_node("Folder");
+                }
+                t2rGetPlacemarkPts_KML(topNode);
+                t2rGetLinestring_KML(topNode);
             }
             else {
                 MessageBoxW(NULL, L"Import file xml - kml format is invalid.", L"Trk2Rt Import Aborted.", MB_OK | MB_ICONERROR);
