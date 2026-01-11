@@ -4,6 +4,7 @@ Track To Route is a tool to:
 - convert tracks and waypoints to routes,
 - convert routes to tracks and waypoints,
 - enhance routes with additional shaping points.
+
 It also supports converstion of kml file placemark points and linestrings to gpx waypoints, tracks and routes.
 
 These, and additional capabilities, are detailed in the User's Guide which is available in the Documentation folder.
