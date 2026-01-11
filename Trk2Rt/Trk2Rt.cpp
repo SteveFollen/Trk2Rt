@@ -276,10 +276,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 else if (pos = wcsstr(cmdLn, L"exportPath=")) {
                     pos += wcslen(L"exportPath=");
                     if (*pos == L'\"') {
-                        endPos = wcschr(pos + 1, L'\"');
+                        pos += 1;
+                        endPos = wcschr(pos, L'\"');
                     }
                     else {
-                        endPos = wcschr(pos + 1, L' ');
+                        endPos = wcschr(pos, L' ');
                     }
                     if (endPos) {
                         wchar_t expPath[MAX_PATH] = L"";   // export file complete path
