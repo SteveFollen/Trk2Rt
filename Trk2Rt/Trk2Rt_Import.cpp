@@ -43,7 +43,7 @@ void t2rSetIntermediateCounts(void) {
             rtPt->nRdIdChg = rtPt->nTrkPts = 0;
         }
 
-        if (trackSource == TS_ROUTE) {
+        if ((trackSource == TS_ROUTE) && theTrack.nRdChg()) {
             rtPt->nShpPts = (int)(rtPt->nRdIdChg * rtPt->shPtPC / 100);
         }
         else {
@@ -77,8 +77,9 @@ static double haversine(double lat1, double lon1, double lat2, double lon2)
 // save associated trackpoint data in the associated route point.
 // Sort routepoints in track point order.
 // Should be called only if primary route points and a track have been read from the import file.
-static void t2rSetPrimaryRtPtsClosestTrkPt(void)
+static tr2RC t2rSetPrimaryRtPtsClosestTrkPt(void)
 {
+    tr2RC retCode = T2R_SUCCESS;
     double dist;    // Haversine distance between 2 points
     RoutePoint* rtPt; // route point
     TrackPoint* trkPt;
@@ -101,7 +102,11 @@ static void t2rSetPrimaryRtPtsClosestTrkPt(void)
         trkPt = theTrack.getNext(trkPt);
         idx++;
     }
-    prmRtPtList.reorderPerTrack();
+    if (prmRtPtList.reorderPerTrack()) {
+        MessageBoxW(NULL, L"Primary Route Point List Reordered To Match Trackpoint Order", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+        retCode = T2R_WARNING | T2R_IMPORT | RCD_REORDER;
+    }
+    return retCode;
 }
 
 // If there is no track, set each primary route point's closest track point index to in-order values.
@@ -127,7 +132,7 @@ LRESULT t2rGetImportFileName()
     IFileOpenDialog* fileOpenDlg = NULL;
     IShellItem* shellItem = NULL;
     PWSTR filePath = NULL;
-    int retVal = -1; // failure
+    tr2RC retCode = T2R_ERROR | T2R_IMPORT;
 
     COMDLG_FILTERSPEC inFltrSpec[] =
     {
@@ -179,7 +184,7 @@ LRESULT t2rGetImportFileName()
         {
             break;
         }
-        retVal = 0; //success
+        retCode = T2R_SUCCESS;
     } while (0);
 
     if (filePath != NULL) {
@@ -187,9 +192,8 @@ LRESULT t2rGetImportFileName()
             wcscpy_s(importPathname, MAX_PATH, filePath);
         }
         else {
-            wstring t2rMsg = L"Import path file is too long.";
-            MessageBoxW(NULL, t2rMsg.c_str(), L"Error While Importing", MB_OK | MB_ICONERROR);
-            retVal = -1;
+            MessageBoxW(NULL, L"Import file pathname is too long.", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+            retCode = T2R_ERROR | T2R_IMPORT | RCD_PATHNAME;
         }
         CoTaskMemFree(filePath);
         filePath = NULL;
@@ -203,7 +207,7 @@ LRESULT t2rGetImportFileName()
         fileOpenDlg = NULL;
     }
 
-    return retVal;
+    return retCode;
 }
 
 // route point comments are sometimes multi-line
@@ -235,7 +239,7 @@ void CRLF2Space(char* str)
 // If it is a Garmin style calculated route, with route point extensions,
 // then also fill theTrack with all unique points and indicate which of those
 // are subclassed points since those identify road id changes which fully define the route.
-static void t2rGetRoute_GPX(xml_node<>* gpxNode)
+static tr2RC  t2rGetRoute_GPX(xml_node<>* gpxNode)
 {
     xml_node<>* rtNode;      // rte
     xml_node<>* rtNmNode;    // rte name
@@ -251,6 +255,7 @@ static void t2rGetRoute_GPX(xml_node<>* gpxNode)
     xml_attribute<>* atrbLat; // attribute latitude
     xml_attribute<>* atrbLon; // attribute longitutde
 
+    tr2RC retCode = T2R_SUCCESS;
     char* name;
     char* cmt; // comment
     char* subclass;
@@ -322,7 +327,8 @@ static void t2rGetRoute_GPX(xml_node<>* gpxNode)
             }
         }
         else {
-            MessageBoxW(NULL, L"Invalid format while parsing route points", L"Error While Importing", MB_OK | MB_ICONERROR);
+            MessageBoxW(NULL, L"Invalid format while parsing route points", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+            retCode = T2R_ERROR | T2R_IMPORT | RCD_PARSE_RTPT;
             break;
         }
 
@@ -368,7 +374,8 @@ static void t2rGetRoute_GPX(xml_node<>* gpxNode)
                     // a valid gpxx:rpt / track point, but it could be a duplicate (many are)
                 }
                 else {
-                    MessageBoxW(NULL, L"Invalid xml format while parsing route point extensions", L"Error While Importing", MB_OK | MB_ICONERROR);
+                    MessageBoxW(NULL, L"Invalid xml format while parsing route point extensions", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                    retCode = T2R_ERROR | T2R_IMPORT | RCD_PARSE_RTPTEX;
                     rtPtNodeNext = NULL; // break all the way out
                     break;
                 }
@@ -411,18 +418,21 @@ static void t2rGetRoute_GPX(xml_node<>* gpxNode)
     else {
         theTrack.empty();
     }
+    return retCode;
 }
 
 // Parse gpx import file, using rapidxml, to find all waypoints in the file,
 // and store them in prmRtPtList. At import, all waypoints become primary route points,
 // which are via points by default. Some may subsequently be changed to shaping points by the user.
 // Called only if no route has been imported.
-static void t2rGetWaypoints_GPX(xml_node<>* gpxNode)
+static tr2RC t2rGetWaypoints_GPX(xml_node<>* gpxNode)
 {
     xml_node<>* wptnode;
     xml_node<>* wptname;
     xml_attribute<>* atrbLat;
     xml_attribute<>* atrbLon;
+
+    tr2RC retCode = T2R_SUCCESS;
     char* name;
     double lat, lon;
     wchar_t ptName[MAX_NAME_LEN];
@@ -449,7 +459,8 @@ static void t2rGetWaypoints_GPX(xml_node<>* gpxNode)
             prmRtPtList.appendLast(lat, lon, ptName);
         }
         else {
-            MessageBoxW(NULL, L"Invalid format while parsing waypoints", L"Error While Importing", MB_OK | MB_ICONERROR);
+            MessageBoxW(NULL, L"Invalid format while parsing waypoints", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+            retCode = T2R_ERROR | T2R_IMPORT | RCD_PARSE_WYPT;
             break;
         }
         wptnode = wptnode->next_sibling("wpt");
@@ -457,13 +468,14 @@ static void t2rGetWaypoints_GPX(xml_node<>* gpxNode)
     if (prmRtPtList.nPts()) {
         prmRtPtSource = PRPS_WAYPOINT;
     }
+    return retCode;
 }
 
 // Parse gpx import file, using rapidxml, to find all track points in the file,
 // and store them in theTrack.
 // Also save the track name, if any, as the track / route name.
 // Called only if a calculated Garmin style route, with route point extensions, has not been imported.
-static void t2rGetTrack_GPX(xml_node<>* gpxNode)
+static tr2RC  t2rGetTrack_GPX(xml_node<>* gpxNode)
 {
     xml_node<>* trknode = NULL;
     xml_node<>* trkname = NULL;
@@ -471,6 +483,8 @@ static void t2rGetTrack_GPX(xml_node<>* gpxNode)
     xml_node<>* trkpt = NULL;
     xml_attribute<>* trkPtLat;
     xml_attribute<>* trkPtLon;
+
+    tr2RC retCode = T2R_SUCCESS;
     char* name;
     double lat, lon;
 
@@ -502,7 +516,8 @@ static void t2rGetTrack_GPX(xml_node<>* gpxNode)
             theTrack.addTrackPoint(lat, lon);
         }
         else {
-            MessageBoxW(NULL, L"Invalid XML format while parsing track points", L"Error While Importing", MB_OK | MB_ICONERROR);
+            MessageBoxW(NULL, L"Invalid XML format while parsing track points", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+            retCode = T2R_ERROR | T2R_IMPORT | RCD_PARSE_TRPT;
             break;
         }
 
@@ -512,16 +527,19 @@ static void t2rGetTrack_GPX(xml_node<>* gpxNode)
     if (theTrack.nPts()) {
         trackSource = TS_TRACK;
     }
+    return retCode;
 }
 
 // Parse kml import file, using rapidxml, to find all placemark points in the file,
 // and store them in prmRtPtList.  At import all placemark points become via points by default.
-static void t2rGetPlacemarkPts_KML(xml_node<>* docNode)
+static tr2RC t2rGetPlacemarkPts_KML(xml_node<>* docNode)
 {
     xml_node<>* plmNode; // Placemark
     xml_node<>* ptNode;  // Point
     xml_node<>* nmNode;  // name
     xml_node<>* crdNode; // coordinates
+
+    tr2RC retCode = T2R_SUCCESS;
     char* name;
     double lat, lon;
     wchar_t ptName[MAX_NAME_LEN];
@@ -560,7 +578,8 @@ static void t2rGetPlacemarkPts_KML(xml_node<>* docNode)
                 prmRtPtList.appendLast(lat, lon, ptName);
             }
             else {
-                MessageBoxW(NULL, L"Invalid xml format while parsing placemark points", L"Error While Importing", MB_OK | MB_ICONERROR);
+                MessageBoxW(NULL, L"Invalid xml format while parsing placemark points", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                retCode = T2R_ERROR | T2R_IMPORT | RCD_PARSE_PMPT;
                 break;
             }
         }
@@ -569,17 +588,20 @@ static void t2rGetPlacemarkPts_KML(xml_node<>* docNode)
     if (prmRtPtList.nPts()) {
         prmRtPtSource = PRPS_PMP;
     }
+    return retCode;
 }
 
 // Parse kml import file, using rapidxml, to find all linestring coordinates in the file,
 // and store them in theTrack.
 // Also save the LineString name, if any, as the track / route name.
-static void t2rGetLinestring_KML(xml_node<>* docNode)
+static tr2RC t2rGetLinestring_KML(xml_node<>* docNode)
 {
     xml_node<>* plmNode; // Placemark
     xml_node<>* lsNode = NULL;  // LineString
     xml_node<>* nmNode;  // name
     xml_node<>* crdNode; // coordinates
+
+    tr2RC retCode = T2R_SUCCESS;
     char* name = NULL;
     double lat, lon;
     size_t len;
@@ -626,7 +648,8 @@ static void t2rGetLinestring_KML(xml_node<>* docNode)
                         theTrack.addTrackPoint(lat, lon);
                     }
                     else {
-                        MessageBoxW(NULL, L"Invalid XML format while parsing LineString coordinates", L"Error While Importing", MB_OK | MB_ICONERROR);
+                        MessageBoxW(NULL, L"Invalid XML format while parsing LineString coordinates", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                        retCode = T2R_ERROR | T2R_IMPORT | RCD_PARSE_LSCRD;
                         break;
                     }
                 }
@@ -638,11 +661,12 @@ static void t2rGetLinestring_KML(xml_node<>* docNode)
     if (theTrack.nPts()) {
         trackSource = TS_LINESTRING;
     }
+    return retCode;
 }
 
-int t2rParseImportFile()
+tr2RC t2rParseImportFile()
 {
-    int retVal = 0; // Return value
+    tr2RC retCode = T2R_SUCCESS;
     wstring importInfoString;
     char impFl[MAX_PATH]; // import file
     wstring pctShPtLbl; // percent of points to addtional shaping points label
@@ -762,7 +786,8 @@ int t2rParseImportFile()
         xml_node<>* topNode = NULL; // Document or Folder node to start parsing placemark point and linestring corrdinates from
 
         if (!doc) {
-            retVal = -1;
+            MessageBoxW(NULL, L"Could not allocate memeory to parse import file", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+            retCode = T2R_ERROR | T2R_IMPORT | RCD_NO_MEM;
             break;
         }
         wcstombs_s(&numChar, impFl, MAX_PATH, importPathname, _TRUNCATE);
@@ -771,8 +796,10 @@ int t2rParseImportFile()
         ifstream importFile;
         importFile.open(importPathname);
         if (!importFile.is_open()) {
-            MessageBoxW(NULL, L"Could not open import file", L"Trk2Rt Import Aborted.", MB_OK | MB_ICONERROR);
-            retVal = -1;
+            wstring tmpStr(importPathname);
+            wstring t2rMsg = L"Failed to Open import file " + tmpStr;
+            MessageBoxW(NULL, t2rMsg.c_str(), L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+            retCode = T2R_ERROR | T2R_IMPORT | RCD_FILE_OPEN;
             break;
         }
         else {
@@ -811,14 +838,14 @@ int t2rParseImportFile()
                 t2rGetLinestring_KML(topNode);
             }
             else {
-                MessageBoxW(NULL, L"Import file xml - kml format is invalid.", L"Trk2Rt Import Aborted.", MB_OK | MB_ICONERROR);
-                retVal = -1;
+                MessageBoxW(NULL, L"Import file xml - kml format is invalid.", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                retCode = T2R_ERROR | T2R_IMPORT | RCD_PARSE_KML;
                 break;
             }
         }
         else {
-            MessageBoxW(NULL, L"Import file is not valid xml format of gpx or kml.", L"Trk2Rt Import Aborted.", MB_OK | MB_ICONERROR);
-            retVal = -1;
+            MessageBoxW(NULL, L"Import file is not valid xml format of gpx or kml.", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+            retCode = T2R_ERROR | T2R_IMPORT | RCD_TYPE;
             break;
         }
 
@@ -841,10 +868,11 @@ int t2rParseImportFile()
 
         if ((theTrack.nPts() < 2) && (prmRtPtList.nPts() < 2)) {
             expRt = false;
-            MessageBoxW(NULL, L"Import file contains nothing to export.", L"Trk2Rt Import Empty", MB_OK | MB_ICONWARNING);
+            MessageBoxW(NULL, L"Import file contains nothing to export.", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            retCode = T2R_WARNING | T2R_IMPORT | RCD_NO_CONTENT;
         }
         else if ((theTrack.nPts() >= 2)) {
-            t2rSetPrimaryRtPtsClosestTrkPt();
+            retCode = t2rSetPrimaryRtPtsClosestTrkPt();
             t2rSetIntermediateCounts();
         }
         else {
@@ -893,7 +921,12 @@ int t2rParseImportFile()
                 break;
             case TS_ROUTE:
                 importInfoString += to_wstring(theTrack.nPts() - prmRtPtList.nPts()) + L" additional route points with " + to_wstring(theTrack.nRdChg()) + L" road changes.";
-                pctShPtLbl = L" of road changes to additional route shaping points";
+                if (theTrack.nRdChg()) {
+                    pctShPtLbl = L" of road changes to additional route shaping points";
+                }
+                else {
+                    pctShPtLbl = L" of additional route (track) points to additional route shaping points";
+                }
                 break;
             case TS_TRACK:
                 importInfoString += to_wstring(theTrack.nPts()) + L" track points";
@@ -954,5 +987,5 @@ int t2rParseImportFile()
         }
     } while (0);
 
-    return retVal;
+    return retCode;
 }

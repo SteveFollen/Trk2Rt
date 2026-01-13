@@ -27,6 +27,9 @@
     <ClInclude Include="Trk2Rt.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Trk2Rt_RetCode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Trk2Rt.cpp">

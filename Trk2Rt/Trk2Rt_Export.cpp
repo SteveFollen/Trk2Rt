@@ -12,7 +12,7 @@ constexpr int MAX_RTPN_LEN = 17;
 // Start with the default and open the standard Windows file save dialog if requested.
 LRESULT t2rGetExportFileName(bool dialog)
 {
-    int retVal = -1; // failure
+    tr2RC retCode = T2R_ERROR | T2R_EXPORT; // Return code
 
     wchar_t exportPath[MAX_PATH]; // export path, without file name
     wchar_t exportFileStem[MAX_PATH];  // export file name without extension
@@ -28,7 +28,7 @@ LRESULT t2rGetExportFileName(bool dialog)
         wcscat_s(exportPathname, MAX_PATH, L"T2R\\");
         wcscat_s(exportPathname, MAX_PATH, exportFileStem);
         wcscat_s(exportPathname, MAX_PATH, L"_T2R.gpx");
-        retVal = 0;
+        retCode = T2R_SUCCESS;
     }
     else {
         IFileSaveDialog* fileSaveDlg = NULL;
@@ -65,7 +65,7 @@ LRESULT t2rGetExportFileName(bool dialog)
                 break;
             if (!SUCCEEDED(shellItem->GetDisplayName(SIGDN_FILESYSPATH, &filePath)))
                 break;
-            retVal = 0; //success
+            retCode = T2R_SUCCESS;
         } while (0);
 
         if (filePath != NULL) {
@@ -73,9 +73,8 @@ LRESULT t2rGetExportFileName(bool dialog)
                 wcscpy_s(exportPathname, MAX_PATH, filePath);
             }
             else {
-                wstring t2rMsg = L"Export pathname is too long.";
-                MessageBoxW(NULL, t2rMsg.c_str(), L"Error While Exporting", MB_OK | MB_ICONERROR);
-                retVal = -1;
+                MessageBoxW(NULL, L"Export file pathname is too long.", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                retCode = T2R_ERROR | T2R_EXPORT | RCD_PATHNAME;
             }
             CoTaskMemFree(filePath);
         }
@@ -89,7 +88,7 @@ LRESULT t2rGetExportFileName(bool dialog)
             fileSaveDlg->Release();
         }
     }
-    return retVal;
+    return retCode;
 }
 
 // Write the route beginning at pt to the export file gpxFileOut.
@@ -356,7 +355,7 @@ static TrackPoint* t2rExportTrack(wofstream& gpxFileOut, TrackPoint* trkPt, int 
 }
 
 // Export all waypoints, route(s) and / or track(s) per user selections and configuration
-LRESULT t2rExport()
+tr2RC t2rExport()
 {
     wstring gpxHdr = L"<?xml version=\"1.0\" encoding=\"utf-8\"?><gpx creator=\"Trk2Rt\" version=\"1.1\"\n"
         "xsi:schemaLocation=\"http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd\n"
@@ -368,7 +367,7 @@ LRESULT t2rExport()
     wstring gpxEnd = L"</gpx>\n";
 
 
-    int retVal = 0; // Return value
+    tr2RC retCode = T2R_SUCCESS; // Return code
     wchar_t exportPath[MAX_PATH]; // export path, without file name
     wchar_t expFileNameEnd[MAX_NAME_END_LEN]; // export file name end
     wchar_t* endPos; // end position
@@ -383,19 +382,19 @@ LRESULT t2rExport()
     bool startNewFile = true; // flag to start a new export gpx file. Each exported route gets its own file
 
     do {
-        if (!(expWpt || expTrk || expRt)) {
-            MessageBoxW(NULL, L"Nothing Selected to Export", L"Error While Exporting", MB_OK | MB_ICONERROR);
-            retVal = -1;
+        if (!theTrack.nPts() && !prmRtPtList.nPts()) {
+            MessageBoxW(NULL, L"Nothing Imported. Nothing to Export", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            retCode = T2R_WARNING | T2R_EXPORT | RCD_NO_CONTENT;
             break;
         }
-        if (!theTrack.nPts() && !prmRtPtList.nPts()) {
-            MessageBoxW(NULL, L"Nothing Imported. Nothing to Export", L"Error While Exporting", MB_OK | MB_ICONERROR);
-            retVal = -1;
+        if (!(expWpt || expTrk || expRt)) {
+            MessageBoxW(NULL, L"Nothing Selected to Export", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            retCode = T2R_WARNING | T2R_EXPORT | RCD_NO_SELECT;
             break;
         }
         if ((!prmRtPtList.nPts() || !expWpt) && (!theTrack.nPts() || !(expTrk || expRt))) {
-            MessageBoxW(NULL, L"Nothing Imported to Support Selected Export", L"Error While Exporting", MB_OK | MB_ICONERROR);
-            retVal = -1;
+            MessageBoxW(NULL, L"Nothing Imported to Support Selected Export", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            retCode = T2R_WARNING | T2R_EXPORT | RCD_NO_MATCH;
             break;
         }
 
@@ -441,8 +440,8 @@ LRESULT t2rExport()
             if (!(gpxFileOut.is_open())) {
                 wstring tmpStr(exportPathname);
                 t2rMsg = L"Failed to Open export file " + tmpStr;
-                MessageBoxW(NULL, t2rMsg.c_str(), L"Error While Exporting", MB_OK | MB_ICONERROR);
-                retVal = -1;
+                MessageBoxW(NULL, t2rMsg.c_str(), L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                retCode = T2R_ERROR | T2R_EXPORT | RCD_FILE_OPEN;
                 break;
             }
 
@@ -481,8 +480,8 @@ LRESULT t2rExport()
             
             rtPartNum++;
             if (rtPartNum > 99) { // sanity check
-                MessageBoxW(NULL, L"Max 99 export routes", L"Error While Exporting", MB_OK | MB_ICONERROR);
-                retVal = -1;
+                MessageBoxW(NULL, L"Max 99 export routes exceeded", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                retCode = T2R_ERROR | T2R_EXPORT | RCD_MAX_RTS;
                 break;
             }
         } while (1);
@@ -519,7 +518,7 @@ LRESULT t2rExport()
         UpdateWindow(hwndMain);
     }
 
-    return retVal;
+    return retCode;
 }
 
 // Clear display of export file name(s).

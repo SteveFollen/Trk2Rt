@@ -147,6 +147,7 @@
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Trk2Rt.h" />
+    <ClInclude Include="Trk2Rt_RetCode.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Trk2Rt.cpp" />

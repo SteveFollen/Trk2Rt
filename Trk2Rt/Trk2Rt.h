@@ -16,6 +16,7 @@
 #include <windef.h>  // for SIZE
 #include "rapidxml_utils.hpp" // the rapid xml parsing [header only] library
 #include <filesystem>
+#include "Trk2Rt_RetCode.h"
 
 namespace fs = std::filesystem;
 
@@ -559,7 +560,6 @@ public:
             }
             tail = current;
             tail->posInRt = RTPOS_LAST;
-            MessageBoxW(NULL, L"Primary Route Point List Reordered To Match Trackpoint Order", L"WARNING", MB_OK | MB_ICONWARNING);
         }
         return reordered;
     }
@@ -645,10 +645,10 @@ extern HWND hwnd2ndExcLbl;    // Second exclude label; this one is for the exclu
 // Forward declarations
 // Import file and parse related
 LRESULT t2rGetImportFileName();
-int t2rParseImportFile();
+tr2RC t2rParseImportFile();
 // Export file related
 LRESULT t2rGetExportFileName(bool dialog);
-LRESULT t2rExport();
+tr2RC t2rExport();
 void t2rClearExportedFileDisplay();
 // child window positioning and main (parent) window sizing
 int  t2rPositionChildWindows();

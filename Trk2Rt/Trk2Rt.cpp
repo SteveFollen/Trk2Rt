@@ -41,6 +41,8 @@ trackSrc_t trackSource;        // track source - none, route, or track
 bool runBkGrnd; //true to run windowless in the background - supports commnad line execution
 bool parseImFl; // true if there is an import file from the command line to be parsed
 bool reLocPrmRtPt;           // relocate each primary route point to its closest track point
+bool allowMsgBox;            // false prevents Trk2Rt from showing error and warning message boxes
+                             // inteneded for windowless (command line) operation if caller is handling return codes
 bool stripPrev;              // strip previous prefix and numbering, if any, from imported route points
 ptNumStyle_t numStyIdx;      // point numbering style on export
 
@@ -62,7 +64,7 @@ int cxVScroll; // width of vertical scroll bar (pixels)
 // These keep the detail windows aligned and allow main window width to be fixed
 int xPosViaPtName; // x position of the primary route point name windows
 int xPosViaPtOps;  // x position of the primary route point options checkboxes & dropdown
-int xPosViaPtDist; // x position of the primary route point distance vlaue & units dropdown
+int xPosViaPtDist; // x position of the primary route point distance value & units dropdown
 
 // widths (x dimension sizes) shared by multiple windows
 int xSzSep;  // width of all seperator lines
@@ -201,6 +203,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // set initial values for global options
     expWpt = expTrk = expRt = true;
     reLocPrmRtPt = true;
+    allowMsgBox = true;
     stripPrev = false;
     numStyIdx = NS_ALL;
     importPathname[0] = L'\0';
@@ -208,7 +211,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     parseImFl = false;
     runBkGrnd = false;
 
-    int retVal = 0;
+    tr2RC retCode = T2R_SUCCESS;
     wchar_t* pos;
     wchar_t* endPos;
     int argc;
@@ -225,15 +228,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 GetFullPathNameW(argFileName, MAX_PATH, importPathname, NULL);
             }
             else {
-                MessageBoxW(NULL, L"Import path file is too long.", L"Trk2Rt Error While Importing", MB_OK | MB_ICONERROR);
-                retVal = -1;
+                MessageBoxW(NULL, L"Import file pathname is too long.", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                retCode = T2R_ERROR | T2R_IMPORT | RCD_PATHNAME;
             }
         }
         LocalFree(argv);
 
         if (argc > 2) {
             runBkGrnd = true; // run windowless in the background
-            if (retVal == 0) {
+            if (T2R_IS_SUCCESS(retCode)) {
                 if (pos = wcsstr(cmdLn, L"noRelocate")) {
                     reLocPrmRtPt = false;
                 }
@@ -245,6 +248,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     if ((tempDbl >= 0.0) && (tempDbl <= 100.0)) {
                         shPtPC = tempDbl;
                     }
+                }
+
+                if (pos = wcsstr(cmdLn, L"noMsgBox")) {
+                    allowMsgBox = false;
                 }
 
                 if (pos = wcsstr(cmdLn, L"stripPrev")) {
@@ -336,14 +343,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                     wcscat_s(exportPathname, MAX_PATH, L"_T2R.gpx");
                 }
 
-                if ((retVal = t2rParseImportFile()) == 0) {
+                if (T2R_IS_SUCCESS(retCode = t2rParseImportFile())) {
                     if (stripPrev && importedNum) {
                         t2rRemovePreviousNumbering();
                     }
-                    t2rExport();
+                    retCode = t2rExport();
                 }
             }
-            return retVal;
+            return retCode;
         }
     } while (0);
 
@@ -1396,7 +1403,7 @@ void t2rCheckAddViaPtsAtTrackEnds(void)
                     newPt->nRdIdChg = 0;
                 }
             }
-            if (trackSource == TS_ROUTE) {
+            if ((trackSource == TS_ROUTE) && theTrack.nRdChg()) {
                 newPt->nShpPts = (int)(newPt->nRdIdChg * newPt->shPtPC / 100);
             }
             else {
@@ -1430,7 +1437,7 @@ void t2rCheckRemoveViaPtsAtTrackEnds(void)
         // The first point (pt) is a generated duplicated of the 2nd (next), so remove it.
         prmRtPtList.remove(pt);
         // nTrkPts and nRdIdChg could not have changed while the point was on the excPtList, but shPtPC could have, so recalculate nShpPts
-        if (trackSource == TS_ROUTE) {
+        if ((trackSource == TS_ROUTE) && theTrack.nRdChg()) {
             next->nShpPts = (int)(next->nRdIdChg * next->shPtPC / 100);
         }
         else {
@@ -1537,10 +1544,10 @@ void t2rCreatePrmRtPtDetailWindows(RoutePoint* pt, HDC& hdc)
     }
 
     if (!rtLast) {
-        if (trackSource == TS_ROUTE) {
+        if ((trackSource == TS_ROUTE) && theTrack.nRdChg()) {
              _snwprintf_s(longAddShpTrk, MAX_NAME_LEN, _TRUNCATE, L"%d Additional shaping points from %d intermediate road changes", pt->nShpPts, pt->nRdIdChg);
        }
-        else if (trackSource == TS_TRACK) {
+        else if ((trackSource == TS_TRACK) || (trackSource == TS_ROUTE)) { // track or route with no road changes
             _snwprintf_s(longAddShpTrk, MAX_NAME_LEN, _TRUNCATE, L"%d Additional shaping points from %d intermediate track points", pt->nShpPts, pt->nTrkPts);
         }
         else if (trackSource == TS_LINESTRING) {
@@ -1745,7 +1752,7 @@ void t2rUpdateRtPtDetailContent()
         }
 
         if (pt->hwndRtPtAdd) {
-            if (trackSource == TS_ROUTE) {
+            if ((trackSource == TS_ROUTE) && theTrack.nRdChg()) {
                 _snwprintf_s(addShpTrk, MAX_NAME_LEN, _TRUNCATE, L"%d Additional shaping points from %d intermediate road changes", pt->nShpPts, pt->nRdIdChg);
             }
             else {
@@ -2037,7 +2044,7 @@ void t2rUpdateRtPtTrkPtPercent(bool selectChange)
         pt = prmRtPtList.getNext(pt);
     }
     if (pt && pt->hwndRtPtAdd) {
-        if (trackSource == TS_ROUTE) {
+        if ((trackSource == TS_ROUTE) && theTrack.nRdChg()) {
             pt->nShpPts = (int)(pt->nRdIdChg * pt->shPtPC / 100);
             _snwprintf_s(addShpTrk, MAX_NAME_LEN, _TRUNCATE, L"%d Additional shaping points from %d intermediate road changes", pt->nShpPts, pt->nRdIdChg);
         }
@@ -2200,7 +2207,7 @@ void t2rUpdateGlobalTrkPtPercent(bool setSelection)
         if (setSelection) {
             pt->nShPtIdx = nShPtIdx;
         }
-        if (trackSource == TS_ROUTE) {
+        if ((trackSource == TS_ROUTE) && theTrack.nRdChg()) {
             pt->nShpPts = (int)(pt->nRdIdChg * shPtPC / 100);
         }
         else {
@@ -2221,7 +2228,7 @@ void t2rUpdateGlobalTrkPtPercent(bool setSelection)
             }
             if (pt->hwndRtPtAdd) {
                 // and update each primary route point's additional shaping point display line
-                if (trackSource == TS_ROUTE) {
+                if ((trackSource == TS_ROUTE) && theTrack.nRdChg()) {
                     _snwprintf_s(addShpTrk, MAX_NAME_LEN, _TRUNCATE, L"%d Additional shaping points from %d intermediate road changes", pt->nShpPts, pt->nRdIdChg);
                 }
                 else {
