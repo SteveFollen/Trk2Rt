@@ -228,7 +228,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                 GetFullPathNameW(argFileName, MAX_PATH, importPathname, NULL);
             }
             else {
-                MessageBoxW(NULL, L"Import file pathname is too long.", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                if (allowMsgBox) {
+                    if (allowMsgBox) {
+                        MessageBoxW(NULL, L"Import file pathname is too long.", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                    }
+                }
                 retCode = T2R_ERROR | T2R_IMPORT | RCD_PATHNAME;
             }
         }
@@ -796,8 +800,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         hwndNumShPt = CreateWindowExW(0, TEXT("COMBOBOX"), NULL, WS_CHILD | WS_VISIBLE | CBS_DROPDOWN,
             0, 0, xSzNumShPt, cyChar * 10, hWnd, (HMENU)IDC_NUMSHPT, hInst, NULL);
         // options and initial value, which depend on track vs route import, are set in t2rParseImportFile()
-
-        GetTextExtentPoint32W(hdc, L" % of linestring coordinates to additional route shaping points  ", 63, &szStr); // longest possiblity
+        GetTextExtentPoint32W(hdc, L" % of additional route (track) points to additional route shaping points  ", 74, &szStr); // longest possiblity
         hwndNumShPtLbl2 = t2rCreateLabelWindow(hWnd, 0, 0, szStr.cx, cyChar, L"");
 
         GetTextExtentPoint32W(hdc, L"Additional / substitute route point name:  ", 43, &szStr);

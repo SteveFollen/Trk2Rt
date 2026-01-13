@@ -597,6 +597,8 @@ extern bool expWpt;  // export waypoints
 extern bool expTrk;  // export track
 extern bool expRt;   // export route
 extern bool reLocPrmRtPt; // relocate each primary route point to its closest track point
+extern bool allowMsgBox;  // false prevents Trk2Rt from showing error and warning message boxes
+                          // inteneded for windowless (command line) operation if caller is handling return codes
 extern bool stripPrev; // strip previous prefix and numbering, if any, from imported route points
 extern ptNumStyle_t numStyIdx; // point numbering style on export
 

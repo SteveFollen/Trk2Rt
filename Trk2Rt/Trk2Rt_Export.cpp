@@ -73,7 +73,9 @@ LRESULT t2rGetExportFileName(bool dialog)
                 wcscpy_s(exportPathname, MAX_PATH, filePath);
             }
             else {
-                MessageBoxW(NULL, L"Export file pathname is too long.", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                if (allowMsgBox) {
+                    MessageBoxW(NULL, L"Export file pathname is too long.", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                }
                 retCode = T2R_ERROR | T2R_EXPORT | RCD_PATHNAME;
             }
             CoTaskMemFree(filePath);
@@ -383,17 +385,23 @@ tr2RC t2rExport()
 
     do {
         if (!theTrack.nPts() && !prmRtPtList.nPts()) {
-            MessageBoxW(NULL, L"Nothing Imported. Nothing to Export", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            if (allowMsgBox) {
+                MessageBoxW(NULL, L"Nothing Imported. Nothing to Export", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            }
             retCode = T2R_WARNING | T2R_EXPORT | RCD_NO_CONTENT;
             break;
         }
         if (!(expWpt || expTrk || expRt)) {
-            MessageBoxW(NULL, L"Nothing Selected to Export", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            if (allowMsgBox) {
+                MessageBoxW(NULL, L"Nothing Selected to Export", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            }
             retCode = T2R_WARNING | T2R_EXPORT | RCD_NO_SELECT;
             break;
         }
         if ((!prmRtPtList.nPts() || !expWpt) && (!theTrack.nPts() || !(expTrk || expRt))) {
-            MessageBoxW(NULL, L"Nothing Imported to Support Selected Export", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            if (allowMsgBox) {
+                MessageBoxW(NULL, L"Nothing Imported to Support Selected Export", L"Trk2Rt Warning", MB_OK | MB_ICONWARNING);
+            }
             retCode = T2R_WARNING | T2R_EXPORT | RCD_NO_MATCH;
             break;
         }
@@ -438,9 +446,11 @@ tr2RC t2rExport()
 
             gpxFileOut.open(exportPathname);
             if (!(gpxFileOut.is_open())) {
-                wstring tmpStr(exportPathname);
-                t2rMsg = L"Failed to Open export file " + tmpStr;
-                MessageBoxW(NULL, t2rMsg.c_str(), L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                if (allowMsgBox) {
+                    wstring tmpStr(exportPathname);
+                    t2rMsg = L"Failed to Open export file " + tmpStr;
+                    MessageBoxW(NULL, t2rMsg.c_str(), L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                }
                 retCode = T2R_ERROR | T2R_EXPORT | RCD_FILE_OPEN;
                 break;
             }
@@ -480,7 +490,9 @@ tr2RC t2rExport()
             
             rtPartNum++;
             if (rtPartNum > 99) { // sanity check
-                MessageBoxW(NULL, L"Max 99 export routes exceeded", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                if (allowMsgBox) {
+                    MessageBoxW(NULL, L"Max 99 export routes exceeded", L"Trk2Rt Error", MB_OK | MB_ICONERROR);
+                }
                 retCode = T2R_ERROR | T2R_EXPORT | RCD_MAX_RTS;
                 break;
             }
